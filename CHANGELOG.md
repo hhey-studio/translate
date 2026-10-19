@@ -5,6 +5,8 @@
 > {note} Fork of 5.0.0 maintained at https://github.com/hhey-studio/translate.
 
 ### Added
+- `craft enupal-translate/translate/content` translates entries, global sets, categories, Navigation nodes or assets in the foreground, one element at a time, with `--target`, `--source`, `--type`, `--section`, `--group`, `--nav`, `--volume`, `--element-id`, `--provider`, `--drafts`, `--sync-status`, `--dry-run` and `--resume`. It lists every failure with a ready-to-run `--element-id=` retry.
+- Navigation nodes that show their entry's title take the translated entry title instead of being translated separately, and link the target site's entry.
 - Verbb Table Maker serializer (column headings and text cells).
 
 ### Changed
