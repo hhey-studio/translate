@@ -117,8 +117,11 @@ class Content extends Component
             'durationMs' => $durationMs,
         ]);
 
-        if (!$result->success && empty($result->translations)) {
-            throw new \RuntimeException($result->errorMessage ?? 'Translation failed.');
+        // A partial result would save a mix of both languages, so any failure
+        // fails the element. Metrics are recorded above, so the cost of the
+        // attempt still shows up on the dashboard.
+        if (!$result->success) {
+            throw new \RuntimeException($result->errorMessage ?: 'Translation failed.');
         }
 
         $translated = ArrayFlattener::unflatten($result->translations, $paths);

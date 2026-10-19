@@ -5,6 +5,7 @@
 > {note} Fork of 5.0.0 maintained at https://github.com/hhey-studio/translate.
 
 ### Changed
+- Strings a model leaves out of its response get one more request; if they are still missing, the element fails instead of being saved half translated.
 - A target that does not exist (section, group or navigation not enabled for the target site) fails before the provider is called.
 
 ### Fixed

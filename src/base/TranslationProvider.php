@@ -156,28 +156,46 @@ abstract class TranslationProvider extends Component
         $result->uniqueStrings = count($uniqueTexts);
         $result->characterCount = array_sum(array_map('mb_strlen', $uniqueTexts));
 
-        $translatedByHash = [];
+        // Keyed by hash. Whatever did come back is kept even when a chunk
+        // fails: the provider still did that work, and throwing it away means
+        // paying for it again on the retry.
+        $byHash = new TranslationResult();
+        $dropped = [];
 
         foreach ($this->chunk($uniqueTexts) as $chunk) {
             $chunkResult = $this->translateChunkWithRetries($chunk, $targetLanguage, $sourceLanguage);
+            $byHash->merge($chunkResult);
 
-            $result->inputTokens += $chunkResult->inputTokens;
-            $result->outputTokens += $chunkResult->outputTokens;
-            $result->apiCalls += $chunkResult->apiCalls;
-
-            if (!$chunkResult->success) {
-                $result->success = false;
-                $result->errorMessage = trim($result->errorMessage . "\n" . $chunkResult->errorMessage);
+            if ($chunkResult->success) {
+                $dropped += array_diff_key($chunk, $chunkResult->translations);
             }
+        }
 
-            // Keep whatever did come back. A provider that fails halfway still
-            // did the work for the strings it got through, and throwing those
-            // away means paying for them again on the retry.
-            $translatedByHash += $chunkResult->translations;
+        // LLMs occasionally leave strings out of an otherwise good response.
+        // Give those one more request of their own before giving up on them.
+        foreach ($this->chunk($dropped) as $chunk) {
+            $byHash->merge($this->translateChunkWithRetries($chunk, $targetLanguage, $sourceLanguage));
+        }
+
+        $result->inputTokens = $byHash->inputTokens;
+        $result->outputTokens = $byHash->outputTokens;
+        $result->apiCalls = $byHash->apiCalls;
+        $result->success = $byHash->success;
+        $result->errorMessage = $byHash->errorMessage;
+
+        $missing = count(array_diff_key($uniqueTexts, $byHash->translations));
+
+        if ($missing > 0) {
+            $result->success = false;
+            $result->errorMessage = trim($result->errorMessage . "\n" . sprintf(
+                '%d of %d strings were not translated.',
+                $missing,
+                count($uniqueTexts)
+            ));
         }
 
         // Fan the de-duplicated translations back out to the original keys.
-        foreach ($translatedByHash as $hash => $translation) {
+        foreach ($byHash->translations as $hash => $translation) {
             foreach ($keysByHash[$hash] ?? [] as $key) {
                 $result->translations[$key] = $translation;
             }
