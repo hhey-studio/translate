@@ -4,6 +4,9 @@
 
 > {note} Fork of 5.0.0 maintained at https://github.com/hhey-studio/translate.
 
+### Added
+- Verbb Table Maker serializer (column headings and text cells).
+
 ### Changed
 - Element links in Link fields are re-pointed at the target site (`{entry:12@1:url}` → `{entry:12@2:url}`), also when the link has no label.
 - Fields with nothing to translate (empty or blank in the source) are mirrored to the target instead of keeping the target's old value.

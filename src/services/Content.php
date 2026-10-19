@@ -33,6 +33,7 @@ use enupal\translate\serializers\Vizy as VizySerializer;
 use enupal\translate\serializers\Matrix as MatrixSerializer;
 use enupal\translate\serializers\RichText as RichTextSerializer;
 use enupal\translate\serializers\Table as TableSerializer;
+use enupal\translate\serializers\TableMaker as TableMakerSerializer;
 use enupal\translate\serializers\Text as TextSerializer;
 use enupal\translate\Translate as TranslatePlugin;
 use Illuminate\Support\Collection;
@@ -552,6 +553,7 @@ class Content extends Component
 
         $this->serializers['craft\fields\PlainText'] = TextSerializer::class;
         $this->serializers['craft\fields\Table'] = TableSerializer::class;
+        $this->serializers['verbb\tablemaker\fields\TableMakerField'] = TableMakerSerializer::class;
         $this->serializers['craft\fields\ContentBlock'] = ContentBlockSerializer::class;
         $this->serializers['craft\fields\Link'] = LinkSerializer::class;
 
