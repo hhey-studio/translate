@@ -36,6 +36,15 @@ class Matrix extends FieldSerializer
     public function setFieldData(ElementInterface $source, ElementInterface $target, mixed $value): mixed
     {
         $query = $source->getFieldValue($this->field->handle);
+
+        // The value written back has to include disabled blocks whether or not
+        // they are translated: any block missing from it gets deleted. Nested
+        // elements are fresh instances here, so their queries are back to
+        // enabled-only even when the serialize pass widened them.
+        if (is_object($query) && method_exists($query, 'status')) {
+            $query = (clone $query)->status(null);
+        }
+
         $serialized = $this->field->serializeValue($query, $source);
 
         if (!is_array($serialized)) {

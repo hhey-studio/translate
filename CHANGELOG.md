@@ -5,6 +5,7 @@
 > {note} Fork of 5.0.0 maintained at https://github.com/hhey-studio/translate.
 
 ### Fixed
+- Disabled blocks in nested Matrix fields (a Matrix inside a Matrix block) were deleted from the target, because only the top level included them in the value written back.
 - Content Block fields were saved in the source language: the translations were merged next to `fields` instead of into it.
 
 ## 5.0.0 - 2026.09.18
