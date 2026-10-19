@@ -15,7 +15,9 @@ use craft\helpers\Db;
 use craft\helpers\FileHelper;
 use craft\helpers\Json;
 use craft\models\Site;
+use craft\web\View;
 use DateTime;
+use enupal\translate\elements\Translate as TranslateElement;
 use enupal\translate\helpers\ArrayFlattener;
 use enupal\translate\records\Metric;
 use enupal\translate\Translate;
@@ -114,6 +116,14 @@ class TranslateController extends Controller
      */
     public bool $resume = false;
 
+    /**
+     * Files or folders to scan for static strings besides the site
+     * templates, e.g. --path=@root/modules. Aliases are resolved.
+     *
+     * @var string[]
+     */
+    public array $path = [];
+
     public function options($actionID): array
     {
         return array_merge(parent::options($actionID), match ($actionID) {
@@ -123,6 +133,7 @@ class TranslateController extends Controller
                 'target', 'source', 'type', 'section', 'group', 'nav', 'volume', 'elementId',
                 'provider', 'drafts', 'syncStatus', 'dryRun', 'resume',
             ],
+            'labels' => ['target', 'path', 'provider', 'dryRun'],
             default => [],
         });
     }
@@ -471,6 +482,131 @@ class TranslateController extends Controller
     }
 
     /**
+     * Translate the static strings (`|t` in templates, `Craft::t()` in PHP)
+     * that are missing from the target sites' translation files.
+     *
+     * The strings are those found in the site templates and every --path,
+     * plus those already in any other language's file, so a string no scan
+     * finds (an option label translated through a variable, say) only has to
+     * be added to one file by hand. Strings a file already has are never sent
+     * again, so edits made by hand are kept. Every translation is then
+     * checked for its source string's placeholders, plural branches and HTML;
+     * a mismatch fails the run, and so does a string that is still missing.
+     *
+     * craft enupal-translate/translate/labels --target=en,fr --path=@root/modules
+     * craft enupal-translate/translate/labels --target=en,fr --dry-run
+     *
+     * @return int
+     */
+    public function actionLabels(): int
+    {
+        $sites = Craft::$app->getSites();
+        $sourceSite = $sites->getPrimarySite();
+
+        if (empty($this->target)) {
+            $this->stderr('Pass the target sites, e.g. --target=en,fr' . PHP_EOL, Console::FG_RED);
+            return ExitCode::USAGE;
+        }
+
+        $targetSites = [];
+
+        foreach ($this->target as $handle) {
+            $site = $sites->getSiteByHandle($handle);
+
+            if ($site === null || $site->id === $sourceSite->id) {
+                $this->stderr("'$handle' is not a valid target site." . PHP_EOL, Console::FG_RED);
+                return ExitCode::USAGE;
+            }
+
+            $targetSites[] = $site;
+        }
+
+        try {
+            $scanned = $this->scanLabels($sourceSite);
+        } catch (Throwable $e) {
+            $this->stderr($e->getMessage() . PHP_EOL, Console::FG_RED);
+            return ExitCode::USAGE;
+        }
+
+        $originals = $scanned;
+
+        foreach ($sites->getAllSites() as $site) {
+            if ($site->language !== $sourceSite->language) {
+                $originals = array_merge($originals, array_keys($this->readLabels($site)));
+            }
+        }
+
+        $originals = array_values(array_unique(array_map('strval', $originals)));
+        sort($originals);
+
+        $this->stdout(sprintf(
+            '%d strings found by the scan, %d with those only in the translation files.' . PHP_EOL,
+            count($scanned),
+            count($originals)
+        ), Console::FG_GREEN);
+
+        $providerHandle = null;
+
+        if (!$this->dryRun) {
+            try {
+                $providerHandle = Translate::$app->content->resolveProvider($this->provider)->handle();
+            } catch (Throwable $e) {
+                $this->stderr($e->getMessage() . PHP_EOL, Console::FG_RED);
+                return ExitCode::CONFIG;
+            }
+        }
+
+        $failed = false;
+
+        foreach ($targetSites as $site) {
+            $missing = array_values(array_diff($originals, array_map('strval', array_keys($this->readLabels($site)))));
+            $this->stdout(PHP_EOL . "$site->handle ($site->language): " . count($missing) . ' missing' . ($this->dryRun ? ' (dry run)' : '') . PHP_EOL, Console::FG_YELLOW);
+
+            foreach ($missing as $original) {
+                $this->stdout('  ' . str_replace("\n", '\n', $original) . PHP_EOL, Console::FG_GREY);
+            }
+
+            if ($missing && !$this->dryRun) {
+                $result = Translate::$app->translate->translateStatic($missing, $providerHandle, $site);
+                $this->stdout(sprintf(
+                    '  Translated %d of %d. Tokens: %d in / %d out.%s' . PHP_EOL,
+                    count($result->translations),
+                    count($missing),
+                    $result->inputTokens,
+                    $result->outputTokens,
+                    $result->errorMessage ? " $result->errorMessage" : ''
+                ), $result->success ? Console::FG_GREEN : Console::FG_RED);
+            }
+
+            $labels = $this->readLabels($site);
+            $stillMissing = $this->dryRun ? [] : array_diff($originals, array_map('strval', array_keys($labels)));
+            $mismatches = [];
+
+            foreach ($labels as $original => $translation) {
+                if ($this->labelSignature((string)$original) !== $this->labelSignature((string)$translation)) {
+                    $mismatches[$original] = $translation;
+                }
+            }
+
+            foreach ($stillMissing as $original) {
+                $this->stdout("  ✗ still missing: $original" . PHP_EOL, Console::FG_RED);
+            }
+
+            foreach ($mismatches as $original => $translation) {
+                $this->stdout("  ✗ placeholders or HTML differ: $original" . PHP_EOL . "    → $translation" . PHP_EOL, Console::FG_RED);
+            }
+
+            if ($stillMissing || $mismatches) {
+                $failed = true;
+            } else {
+                $this->stdout(sprintf('  ✓ %d translations checked', count($labels)) . PHP_EOL, Console::FG_GREEN);
+            }
+        }
+
+        return $failed ? ExitCode::UNSPECIFIED_ERROR : ExitCode::OK;
+    }
+
+    /**
      * Element queries for the chosen type, keyed by a label for the output.
      * Structures are walked in structure order, so a parent always gets its
      * translated slug before its children build their URIs from it.
@@ -672,4 +808,81 @@ class TranslateController extends Controller
         return $element::displayName() . ($title !== '' ? ' “' . mb_strimwidth($title, 0, 50, '…') . '”' : '');
     }
 
+    /**
+     * Static strings in the site templates and the --path files and folders,
+     * found the way the Translations page finds them.
+     *
+     * @return string[]
+     */
+    private function scanLabels(Site $sourceSite): array
+    {
+        $sources = [Craft::$app->getPath()->getSiteTemplatesPath()];
+
+        foreach ($this->path as $path) {
+            $resolved = Craft::getAlias($path);
+
+            if ($resolved === false || !file_exists($resolved)) {
+                throw new \InvalidArgumentException("Path '$path' does not exist.");
+            }
+
+            $sources[] = $resolved;
+        }
+
+        // Without a status the scan keeps every string; the default status
+        // drops them all. It renders a control panel field for each string.
+        $query = TranslateElement::find()->siteId($sourceSite->id)->status(null);
+        $query->source = $sources;
+        $view = Craft::$app->getView();
+        $templateMode = $view->getTemplateMode();
+        $view->setTemplateMode(View::TEMPLATE_MODE_CP);
+
+        try {
+            return array_map('strval', array_keys(Translate::$app->translate->get($query)));
+        } finally {
+            $view->setTemplateMode($templateMode);
+        }
+    }
+
+    /**
+     * The site's translation file, as it is on disk now.
+     */
+    private function readLabels(Site $site): array
+    {
+        $file = Translate::$app->translate->getSitePath($site->language);
+
+        if (!is_file($file)) {
+            return [];
+        }
+
+        // The file may have been written since this process last included it.
+        if (function_exists('opcache_invalidate')) {
+            opcache_invalidate($file, true);
+        }
+
+        $labels = include $file;
+
+        return is_array($labels) ? $labels : [];
+    }
+
+    /**
+     * Placeholder names, plural/select keywords, HTML tags and link
+     * attributes of a string, which its translation has to keep.
+     */
+    private function labelSignature(string $text): string
+    {
+        // Plural branches like `other{# Treffer}` hold text, not a placeholder.
+        $withoutBranches = preg_replace('/(=\d+|\b(?:zero|one|two|few|many|other))\s*\{/', '$1{#', $text);
+        preg_match_all('/\{\s*([A-Za-z_][A-Za-z0-9_]*)/', $withoutBranches, $placeholders);
+        preg_match_all('/,\s*(?:plural|select|selectordinal)\s*,|(?:=\d+|\b(?:zero|one|two|few|many|other))\s*\{/', $text, $keywords);
+        preg_match_all('/<\/?[a-z0-9]+|\s(?:href|class|target|rel)="[^"]*"/i', $text, $html);
+
+        $parts = [$placeholders[1], $keywords[0], $html[0]];
+
+        foreach ($parts as &$part) {
+            $part = array_map(fn($value) => preg_replace('/\s+/', '', strtolower($value)), $part);
+            sort($part);
+        }
+
+        return Json::encode($parts);
+    }
 }
