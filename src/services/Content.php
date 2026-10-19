@@ -193,26 +193,34 @@ class Content extends Component
         ]);
 
         if ($target instanceof Entry && $target->getIsDraft()) {
-            Craft::$app->getDrafts()->saveElementAsDraft($target, null, $draftName, $notes);
+            $saved = Craft::$app->getDrafts()->saveElementAsDraft($target, null, $draftName, $notes);
         } elseif ($isRoot && $target instanceof Entry && $settings->saveAsDraft) {
             $target = Craft::$app->getDrafts()->createDraft($target, null, $draftName, $notes);
             // The draft is a fresh element, so the values have to be applied again.
             $this->setElementTranslation($source, $target, $translated);
-            Craft::$app->getElements()->saveElement($target);
+            $saved = Craft::$app->getElements()->saveElement($target);
         } else {
             if (method_exists($target, 'setRevisionNotes')) {
                 $target->setRevisionNotes($notes);
             }
-            Craft::$app->getElements()->saveElement($target);
+            $saved = Craft::$app->getElements()->saveElement($target);
         }
 
-        if (!empty($target->getErrors())) {
+        if (!$saved || $target->hasErrors()) {
             Craft::error([
                 'message' => 'Validation errors while saving a translated element.',
                 'elementId' => $target->id,
                 'siteId' => $target->siteId,
                 'errors' => $target->getErrors(),
             ], __METHOD__);
+
+            throw new \RuntimeException(sprintf(
+                'Could not save %s #%s in site "%s": %s',
+                $target::displayName(),
+                $target->id,
+                $targetSite->handle,
+                implode(' ', $target->getFirstErrors()) ?: 'unknown error'
+            ));
         }
 
         return $target;
