@@ -29,19 +29,15 @@ class RichText extends FieldSerializer
         $this->sourceSite = $sourceSite;
         $this->targetSite = $targetSite;
 
-        $value = parent::serialize($element, $sourceSite, $targetSite);
-
-        if (is_array($value)) {
-            // CKEditor stores nested entries alongside the markup.
-            return ['html' => $value['value'] ?? null];
-        }
-
-        return ['html' => is_string($value) ? $value : null];
+        return ['html' => $this->getHtml($element)];
     }
 
     public function setFieldData(ElementInterface $source, ElementInterface $target, mixed $value): mixed
     {
-        $html = $value['html'] ?? null;
+        // No translation means there was nothing to translate (an empty or
+        // blank value), so the target mirrors the source rather than keeping
+        // whatever it had before.
+        $html = $value['html'] ?? $this->getHtml($source) ?? '';
 
         if (!is_string($html)) {
             return null;
@@ -51,5 +47,22 @@ class RichText extends FieldSerializer
         $targetSite = $this->targetSite ?? $target->getSite();
 
         return $this->translateReferenceTags($html, $sourceSite, $targetSite);
+    }
+
+    public function appliesWithoutTranslation(): bool
+    {
+        return true;
+    }
+
+    private function getHtml(ElementInterface $element): ?string
+    {
+        $value = $this->field->serializeValue($element->getFieldValue($this->field->handle), $element);
+
+        if (is_array($value)) {
+            // CKEditor stores nested entries alongside the markup.
+            $value = $value['value'] ?? null;
+        }
+
+        return is_string($value) ? $value : null;
     }
 }

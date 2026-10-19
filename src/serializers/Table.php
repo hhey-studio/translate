@@ -82,6 +82,13 @@ class Table extends FieldSerializer
         return $result;
     }
 
+    public function appliesWithoutTranslation(): bool
+    {
+        // Untranslated cells fall back to the source, so a table without
+        // any text still mirrors the source rows.
+        return true;
+    }
+
     /**
      * @return string[]
      */

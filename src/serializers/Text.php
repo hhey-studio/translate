@@ -26,6 +26,14 @@ class Text extends FieldSerializer
 
     public function setFieldData(ElementInterface $source, ElementInterface $target, mixed $value): mixed
     {
-        return $value['text'] ?? null;
+        // No translation means there was nothing to translate (an empty or
+        // blank value), so the target mirrors the source rather than keeping
+        // whatever it had before.
+        return $value['text'] ?? $source->getFieldValue($this->field->handle) ?? '';
+    }
+
+    public function appliesWithoutTranslation(): bool
+    {
+        return true;
     }
 }
