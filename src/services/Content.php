@@ -100,6 +100,9 @@ class Content extends Component
             return null;
         }
 
+        // Fail before paying for a translation that could not be saved.
+        $this->assertTargetSupported($source, $targetSite);
+
         $sourceLanguage = $settings->detectSourceLanguage ? null : $sourceSite->language;
 
         $startedAt = microtime(true);
@@ -416,21 +419,7 @@ class Content extends Component
             return $existing;
         }
 
-        if (!$source instanceof Entry) {
-            // Nothing sensible to create for non-entries; fall back to the source.
-            return $source;
-        }
-
-        // Craft throws a bare UnsupportedSiteException if the section isn't
-        // enabled for the target site. Catch it here so the user gets told
-        // what to fix rather than a stack trace.
-        if (!$this->supportsSite($source, $targetSite)) {
-            throw new UnsupportedSiteException($source, $targetSite->id, Craft::t('enupal-translate',
-                'The section “{section}” is not enabled for the site “{site}”. Enable it in Settings → Sections before translating.', [
-                    'section' => $source->getSection()?->name ?? $source->getRootOwner()::displayName(),
-                    'site' => $targetSite->name,
-                ]));
-        }
+        $this->assertTargetSupported($source, $targetSite);
 
         $propagationMethod = $source->getSection()?->propagationMethod;
 
@@ -461,6 +450,48 @@ class Content extends Component
         }
 
         return Craft::$app->getElements()->duplicateElement($source, ['siteId' => $targetSite->id]);
+    }
+
+    /**
+     * Throw when the element has no counterpart in the target site and none
+     * can be created, telling the user what to fix.
+     *
+     * @throws UnsupportedSiteException
+     */
+    public function assertTargetSupported(ElementInterface $source, Site $targetSite): void
+    {
+        if ($source instanceof Entry) {
+            // Craft throws a bare UnsupportedSiteException if the section isn't
+            // enabled for the target site. Check here so the user gets told
+            // what to fix rather than a stack trace.
+            if (!$this->supportsSite($source, $targetSite)) {
+                throw new UnsupportedSiteException($source, $targetSite->id, Craft::t('enupal-translate',
+                    'The section “{section}” is not enabled for the site “{site}”. Enable it in Settings → Sections before translating.', [
+                        'section' => $source->getSection()?->name ?? $source->getRootOwner()::displayName(),
+                        'site' => $targetSite->name,
+                    ]));
+            }
+
+            return;
+        }
+
+        // Nothing sensible to create for non-entries. Writing to the source
+        // instead would overwrite the original content with the translation.
+        $exists = $source::find()
+            ->id($source->getCanonicalId() ?? $source->id)
+            ->siteId($targetSite->id)
+            ->status(null)
+            ->drafts(null)
+            ->exists();
+
+        if (!$exists) {
+            throw new UnsupportedSiteException($source, $targetSite->id, Craft::t('enupal-translate',
+                '{type} #{id} does not exist in the site “{site}”. Enable its section, group or navigation for that site before translating.', [
+                    'type' => $source::displayName(),
+                    'id' => $source->id,
+                    'site' => $targetSite->name,
+                ]));
+        }
     }
 
     /**
