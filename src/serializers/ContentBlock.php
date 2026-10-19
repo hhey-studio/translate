@@ -35,17 +35,24 @@ class ContentBlock extends FieldSerializer
     {
         $block = $source->getFieldValue($this->field->handle);
 
-        if (!$block instanceof ElementInterface || empty($value['fields'])) {
+        // Craft hands back an unsaved block when the source never had one;
+        // writing that would only create an empty block in every site.
+        if (!$block instanceof ElementInterface || !$block->id) {
             return null;
         }
 
         $serialized = $this->field->serializeValue($block, $source);
-        $translated = TranslatePlugin::$app->content->setElementFieldsTranslations($block, $target, $value['fields']);
+        $translated = TranslatePlugin::$app->content->setElementFieldsTranslations($block, $target, $value['fields'] ?? []);
 
         // Craft only reads the nested values from the 'fields' key, so the
         // translations have to go in there rather than next to it.
         return [
             'fields' => array_merge(is_array($serialized) ? ($serialized['fields'] ?? []) : [], $translated),
         ];
+    }
+
+    public function appliesWithoutTranslation(): bool
+    {
+        return true;
     }
 }

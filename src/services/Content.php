@@ -317,8 +317,12 @@ class Content extends Component
             $target->alt = $translated['alt'];
         }
 
-        if (!empty($translated['fields'])) {
-            $target->setFieldValues($this->setElementFieldsTranslations($source, $target, $translated['fields']));
+        // Always descend, even without translated fields: links and nested
+        // elements still have to be pointed at the target site.
+        $values = $this->setElementFieldsTranslations($source, $target, $translated['fields'] ?? []);
+
+        if (!empty($values)) {
+            $target->setFieldValues($values);
         }
     }
 
@@ -330,18 +334,18 @@ class Content extends Component
         $values = [];
 
         foreach ($this->getTranslatableFields($source) as $handle => $field) {
-            if (empty($translatedFields[$handle])) {
-                continue;
-            }
-
             $serializer = $this->getSerializer($field);
 
             if ($serializer === null) {
                 continue;
             }
 
+            if (empty($translatedFields[$handle]) && !$serializer->appliesWithoutTranslation()) {
+                continue;
+            }
+
             try {
-                $value = $serializer->setFieldData($source, $target, $translatedFields[$handle]);
+                $value = $serializer->setFieldData($source, $target, $translatedFields[$handle] ?? []);
 
                 if ($value !== null) {
                     $values[$handle] = $value;

@@ -54,26 +54,27 @@ class Matrix extends FieldSerializer
         $translatedChildren = $value['children'] ?? [];
 
         foreach ($this->getNestedElements($source) as $nested) {
-            $translated = $translatedChildren[$nested->id] ?? null;
-
-            if (!is_array($translated) || !isset($serialized[$nested->id])) {
+            if (!isset($serialized[$nested->id])) {
                 continue;
             }
+
+            // Blocks without any strings are still descended into: the links
+            // inside them have to be re-pointed at the target site.
+            $translated = $translatedChildren[$nested->id] ?? [];
+            $translated = is_array($translated) ? $translated : [];
 
             if (!empty($translated['title'])) {
                 $serialized[$nested->id]['title'] = $translated['title'];
             }
 
-            if (!empty($translated['fields'])) {
-                $translatedFields = TranslatePlugin::$app->content->setElementFieldsTranslations($nested, $target, $translated['fields']);
+            $translatedFields = TranslatePlugin::$app->content->setElementFieldsTranslations($nested, $target, $translated['fields'] ?? []);
 
-                // Merge rather than replace, so fields that weren't translated
-                // keep their original values instead of being wiped.
-                $serialized[$nested->id]['fields'] = array_merge(
-                    $serialized[$nested->id]['fields'] ?? [],
-                    $translatedFields
-                );
-            }
+            // Merge rather than replace, so fields that weren't translated
+            // keep their original values instead of being wiped.
+            $serialized[$nested->id]['fields'] = array_merge(
+                $serialized[$nested->id]['fields'] ?? [],
+                $translatedFields
+            );
         }
 
         // Neo overwrites blocks across every site unless the value is wrapped.
@@ -83,6 +84,11 @@ class Matrix extends FieldSerializer
         }
 
         return $serialized;
+    }
+
+    public function appliesWithoutTranslation(): bool
+    {
+        return true;
     }
 
     /**

@@ -13,10 +13,16 @@ use craft\models\Site;
 use enupal\translate\base\FieldSerializer;
 
 /**
- * Link fields. Only the visible label is translated; the URL is left alone.
+ * Link fields. The visible strings are translated and element links are
+ * re-pointed at the target site.
+ *
+ * Craft pins the site when an element is picked ({entry:12@1:url}), so a link
+ * copied across as-is keeps resolving to the source site's URL.
  */
 class Link extends FieldSerializer
 {
+    private const TEXT_KEYS = ['label', 'title', 'ariaLabel'];
+
     public function serialize(ElementInterface $element, Site $sourceSite, Site $targetSite): mixed
     {
         $value = parent::serialize($element, $sourceSite, $targetSite);
@@ -25,10 +31,13 @@ class Link extends FieldSerializer
             return ['label' => null];
         }
 
-        return [
-            'label' => $value['label'] ?? null,
-            'title' => $value['title'] ?? null,
-        ];
+        $strings = [];
+
+        foreach (self::TEXT_KEYS as $key) {
+            $strings[$key] = $value[$key] ?? null;
+        }
+
+        return $strings;
     }
 
     public function setFieldData(ElementInterface $source, ElementInterface $target, mixed $value): mixed
@@ -39,12 +48,23 @@ class Link extends FieldSerializer
             return null;
         }
 
-        foreach (['label', 'title'] as $key) {
+        $value = is_array($value) ? $value : [];
+
+        foreach (self::TEXT_KEYS as $key) {
             if (!empty($value[$key])) {
                 $serialized[$key] = $value[$key];
             }
         }
 
+        if (isset($serialized['value']) && is_string($serialized['value'])) {
+            $serialized['value'] = $this->translateReferenceTags($serialized['value'], $source->getSite(), $target->getSite());
+        }
+
         return $serialized;
+    }
+
+    public function appliesWithoutTranslation(): bool
+    {
+        return true;
     }
 }

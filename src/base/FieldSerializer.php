@@ -41,6 +41,17 @@ abstract class FieldSerializer
     abstract public function setFieldData(ElementInterface $source, ElementInterface $target, mixed $value): mixed;
 
     /**
+     * Whether {@see setFieldData()} has to run even when the provider returned
+     * nothing for this field. A link without a label has no strings to send,
+     * but its target still has to be re-pointed at the target site; container
+     * fields have to descend so the links inside them are reached.
+     */
+    public function appliesWithoutTranslation(): bool
+    {
+        return false;
+    }
+
+    /**
      * Re-point Craft reference tags at the target site, so an internal link in
      * the Spanish entry resolves to the Spanish URL rather than the English one.
      */
