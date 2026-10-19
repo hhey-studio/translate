@@ -291,6 +291,13 @@ class Content extends Component
             }
         }
 
+        // The homepage slug is a marker, not a word. Regenerating it from the
+        // title would take the homepage away from the target site and move
+        // every child URI under the new slug.
+        if ($source->slug === Element::HOMEPAGE_URI) {
+            $target->slug = Element::HOMEPAGE_URI;
+        }
+
         if (!empty($translated['alt']) && $target instanceof Asset) {
             $target->alt = $translated['alt'];
         }
