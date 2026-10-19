@@ -7,6 +7,7 @@
 ### Changed
 - Element links in Link fields are re-pointed at the target site (`{entry:12@1:url}` → `{entry:12@2:url}`), also when the link has no label.
 - Fields with nothing to translate (empty or blank in the source) are mirrored to the target instead of keeping the target's old value.
+- Titles of entry types without a title field are no longer sent: Craft rebuilds them from the title format on save.
 - Strings a model leaves out of its response get one more request; if they are still missing, the element fails instead of being saved half translated.
 - A field that cannot be serialized or written back now fails the element instead of being skipped silently.
 - Elements that cannot be saved (validation errors) now fail instead of only being logged.

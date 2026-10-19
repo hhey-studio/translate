@@ -242,6 +242,7 @@ class Content extends Component
         if ($settings->translateTitle
             && !empty($element->title)
             && !in_array('title', $excluded, true)
+            && $this->hasEditableTitle($element)
             && (!method_exists($element, 'getIsTitleTranslatable') || $element->getIsTitleTranslatable())) {
             $serialized['title'] = $element->title;
         }
@@ -256,6 +257,20 @@ class Content extends Component
         $serialized['fields'] = $this->serializeElementFields($element, $sourceSite, $targetSite);
 
         return $serialized;
+    }
+
+    /**
+     * Whether the title is entered by an author. Titles generated from a title
+     * format are rebuilt from the translated fields on save, so sending them
+     * would only cost tokens.
+     */
+    private function hasEditableTitle(ElementInterface $element): bool
+    {
+        if ($element instanceof Entry) {
+            return $element->getType()->hasTitleField;
+        }
+
+        return true;
     }
 
     /**
