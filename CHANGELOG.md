@@ -6,6 +6,7 @@
 
 ### Changed
 - Strings a model leaves out of its response get one more request; if they are still missing, the element fails instead of being saved half translated.
+- A field that cannot be serialized or written back now fails the element instead of being skipped silently.
 - A target that does not exist (section, group or navigation not enabled for the target site) fails before the provider is called.
 
 ### Fixed

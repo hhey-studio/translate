@@ -267,14 +267,15 @@ class Content extends Component
             try {
                 $serialized[$handle] = $serializer->serialize($element, $sourceSite, $targetSite);
             } catch (Throwable $e) {
-                // One awkward field shouldn't sink the whole element.
-                Craft::warning(sprintf(
+                // Skipping the field would leave it in the source language on
+                // an element that otherwise looks translated.
+                throw new \RuntimeException(sprintf(
                     'Could not serialize field "%s" (%s) on element %s: %s',
                     $handle,
                     get_class($field),
                     $element->id,
                     $e->getMessage()
-                ), __METHOD__);
+                ), 0, $e);
             }
         }
 
@@ -338,12 +339,12 @@ class Content extends Component
                     $values[$handle] = $value;
                 }
             } catch (Throwable $e) {
-                Craft::warning(sprintf(
+                throw new \RuntimeException(sprintf(
                     'Could not apply translation for field "%s" on element %s: %s',
                     $handle,
                     $source->id,
                     $e->getMessage()
-                ), __METHOD__);
+                ), 0, $e);
             }
         }
 
