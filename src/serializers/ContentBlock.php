@@ -42,10 +42,10 @@ class ContentBlock extends FieldSerializer
         $serialized = $this->field->serializeValue($block, $source);
         $translated = TranslatePlugin::$app->content->setElementFieldsTranslations($block, $target, $value['fields']);
 
-        if (!is_array($serialized)) {
-            return $translated;
-        }
-
-        return array_merge($serialized, $translated);
+        // Craft only reads the nested values from the 'fields' key, so the
+        // translations have to go in there rather than next to it.
+        return [
+            'fields' => array_merge(is_array($serialized) ? ($serialized['fields'] ?? []) : [], $translated),
+        ];
     }
 }

@@ -1,5 +1,12 @@
 # Enupal Translate Changelog
 
+## Unreleased (hhey fork)
+
+> {note} Fork of 5.0.0 maintained at https://github.com/hhey-studio/translate.
+
+### Fixed
+- Content Block fields were saved in the source language: the translations were merged next to `fields` instead of into it.
+
 ## 5.0.0 - 2026.09.18
 
 > {warning} Content translation and the AI providers are new in this release and are still being proven on real sites. Static template translation is unchanged and works as it always has. Please report anything you hit at https://github.com/enupal/translate/issues — include the provider, the field type, and the relevant row from the dashboard's recent activity table.
